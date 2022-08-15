@@ -1,21 +1,20 @@
-from rest_framework import viewsets
-from posts.models import Post, Group, Comment
-from .serializers import PostSerializer, GroupSerializer, CommentSerializer
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
-from posts.models import User
+from posts.models import Group, Post, User
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+
+from .serializers import CommentSerializer, GroupSerializer, PostSerializer
 
 
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         author = get_object_or_404(User, username=self.request.user.username)
         serializer.save(author=author)
-        if serializer.instance.author != self.request.user:
-            raise PermissionDenied('Изменение чужого контента запрещено!')
-        super(PostViewSet, self).perform_create(serializer)
 
     def perform_update(self, serializer):
         if serializer.instance.author != self.request.user:
@@ -26,23 +25,22 @@ class PostViewSet(viewsets.ModelViewSet):
         if instance.author != self.request.user:
             raise PermissionDenied('Удаление чужого контента запрещено!')
         super().perform_destroy(instance)
-# я долго пытался передать вместо id username в author
-# вышло методом тыка, это точно верно?
 
 
-class GroupViewSet(viewsets.ModelViewSet):
+class GroupViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
-    http_method_names = ['get', 'head', 'put', 'patch', 'delete']
+    permission_classes = [IsAuthenticated]
 
 
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         post_id = self.kwargs.get('post_id')
-        comments = Comment.objects.filter(post=post_id)
-        return comments
+        post = Post.objects.get(id=post_id)
+        return post.comments
 
     def perform_create(self, serializer):
         post_id = self.kwargs.get('post_id')
@@ -58,7 +56,3 @@ class CommentViewSet(viewsets.ModelViewSet):
         if instance.author != self.request.user:
             raise PermissionDenied('Удаление чужого контента запрещено!')
         super().perform_destroy(instance)
-# ээээ.... в общем, крашилось с ошибкой
-# TypeError: super(type, obj): obj must be an instance or subtype of type
-# пока я не вычитал на стаковерфлоу что можно не давать аргументы для super
-# это вообще правильно? что я сделал то вообще?
